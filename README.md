@@ -18,7 +18,9 @@ the MCP lifecycle spec baseline dated 2025-06-18.
 
 ## Status
 
-Active development. 
+I decided to move the project from Paid software to open source thanks to <a href="https://bags.fm/">Bags platform</a>
+I need some time to prepare the code for open sourcing it and for allowing to download builds straight from the site and remove license gate.
+Bear with me, I need some hours for this.
 
 ## Features
 
