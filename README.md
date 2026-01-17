@@ -12,7 +12,7 @@
 
 <h1 align="center">MCP Bundler (macOS)</h1>
 
-MCP Bundler is a macOS SwiftUI app for managing and running Model Context Protocol (MCP)
+MCP Bundler is a macOS SwiftUI app for managing and running Agent Skills and Model Context Protocol (MCP)
 servers, with a headless stdio mode for CLI and automation workflows. The codebase targets
 the MCP lifecycle spec baseline dated 2025-06-18.
 
