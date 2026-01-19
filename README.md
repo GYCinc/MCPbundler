@@ -33,6 +33,23 @@ Until then you can download app here: <a href="https://mcp-bundler.com/downloads
 - Skill marketplace sources with curated defaults.
 - OAuth flows and remote auth support (work in progress).
 
+## Screenshots
+
+![MCP Servers view](docs/screenshots/1.png)
+_Servers list with folders, health status, and quick actions._
+
+![Skills library](docs/screenshots/2.png)
+_Skills library with folders and per-location toggles._
+
+![Project settings](docs/screenshots/3.png)
+_Project settings for skill sync locations, marketplaces, and optimizations._
+
+![Project logs](docs/screenshots/4.png)
+_Project logs with auto-refresh controls and pagination._
+
+![Skills marketplace](docs/screenshots/5.png)
+_Skills marketplace browser with categories and install actions._
+
 ## Requirements
 
 - macOS
