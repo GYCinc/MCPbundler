@@ -773,36 +773,13 @@ struct ProjectDetailView: View {
                         }
                         .contentShape(Rectangle())
                     case .server(let server, let folder):
-                        let effectiveEnabled = server.isEffectivelyEnabled
-                        let disabledByFolder = (folder != nil && (folder?.isEnabled == false))
-                        HStack(alignment: .top, spacing: 0) {
-                            Color.clear
-                                .frame(width: folder == nil ? 0 : 18)
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack(spacing: 6) {
-                                    Text(server.alias)
-                                        .foregroundStyle(effectiveEnabled ? Color.primary : Color.secondary)
-                                    if disabledByFolder {
-                                        Label("Disabled by folder", systemImage: "lock.fill")
-                                            .labelStyle(.titleAndIcon)
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                Text(serverKindLabel(for: server))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                if server.kind == .remote_http_sse && server.usesOAuthAuthorization {
-                                    OAuthStatusIndicator(status: server.oauthStatus)
-                                }
+                        ServerRow(server: server, folder: folder)
+                            .contentShape(Rectangle())
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(rowHighlight(for: server))
+                            .onDrag {
+                                beginDrag(for: server, source: "name")
                             }
-                        }
-                        .contentShape(Rectangle())
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(rowHighlight(for: server))
-                        .onDrag {
-                            beginDrag(for: server, source: "name")
-                        }
                     }
                 }
                 .width(min: 220, ideal: 260)
