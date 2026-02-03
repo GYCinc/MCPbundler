@@ -868,10 +868,10 @@ struct ServerDetailSheet: View {
     private var authBadge: some View {
         // If no auth configured at all, indicate that neutrally and show no action button
         if server.usesManualCredentials {
-            return AnyView(Label("Manual access", systemImage: "key.fill").foregroundStyle(Color.accentColor))
+            return AnyView(HealthBadge(status: .healthy, customLabel: "Manual Access", customIcon: "key.fill", customColor: .accentColor))
         }
         if !server.usesOAuthAuthorization {
-            return AnyView(Label("Without authorization", systemImage: "minus.circle").foregroundStyle(.secondary))
+            return AnyView(HealthBadge(status: .unknown, customLabel: "No Authorization", customIcon: "minus.circle"))
         }
         // Map OAuthStatus to a Health-like badge appearance
         let mapped: HealthStatus
@@ -880,21 +880,25 @@ struct ServerDetailSheet: View {
         case .refreshing: mapped = .degraded
         case .unauthorized, .error: mapped = .unhealthy
         }
-        // Render with custom label text but HealthBadge colors/icons
-        return AnyView(Group {
-            switch mapped {
-            case .healthy:
-                Label("Signed in", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-            case .degraded:
-                Label("Refreshing", systemImage: "clock.arrow.circlepath").foregroundStyle(.yellow)
-            case .unhealthy:
-                let label = (server.oauthStatus == .unauthorized) ? "Sign-in required" : "Needs attention"
-                Label(label, systemImage: server.oauthStatus == .unauthorized ? "xmark.circle.fill" : "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-            case .unknown:
-                Label("Unknown", systemImage: "questionmark.circle").foregroundStyle(.secondary)
-            }
-        })
+
+        let label: String
+        let icon: String?
+        switch mapped {
+        case .healthy:
+            label = "Signed In"
+            icon = "checkmark.circle.fill"
+        case .degraded:
+            label = "Refreshing"
+            icon = "clock.arrow.circlepath"
+        case .unhealthy:
+            label = (server.oauthStatus == .unauthorized) ? "Sign-in Required" : "Needs Attention"
+            icon = (server.oauthStatus == .unauthorized) ? "xmark.circle.fill" : "exclamationmark.triangle.fill"
+        case .unknown:
+            label = "Unknown"
+            icon = "questionmark.circle"
+        }
+
+        return AnyView(HealthBadge(status: mapped, customLabel: label, customIcon: icon))
     }
 
     private var advancedOptionsCard: some View {
