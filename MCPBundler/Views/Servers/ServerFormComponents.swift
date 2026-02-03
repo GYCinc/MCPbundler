@@ -10,6 +10,7 @@ import SwiftUI
 enum ServerEditorTab: String, CaseIterable, Identifiable {
     case basics
     case auth
+    case configuration
     case tools
 
     var id: String { rawValue }

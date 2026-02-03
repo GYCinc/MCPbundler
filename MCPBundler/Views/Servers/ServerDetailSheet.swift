@@ -540,7 +540,7 @@ struct ServerDetailSheet: View {
                     }
                 case .tools:
                     capabilityInfo
-                case .auth:
+                case .auth, .configuration:
                     // Not applicable for STDIO; fall back to basics
                     VStack(alignment: .leading, spacing: 12) {
                         GroupBox("Basics") { localBasicsSection }
@@ -549,7 +549,7 @@ struct ServerDetailSheet: View {
                 }
             }
         }
-        .onAppear { if selectedTab == .auth { selectedTab = .basics } }
+        .onAppear { if selectedTab == .auth || selectedTab == .configuration { selectedTab = .basics } }
     }
 
     private var actionRow: some View {
@@ -755,6 +755,7 @@ struct ServerDetailSheet: View {
             Picker("Section", selection: $selectedTab) {
                 Text("Basics").tag(ServerEditorTab.basics)
                 Text("Auth").tag(ServerEditorTab.auth)
+                Text("Config").tag(ServerEditorTab.configuration)
                 Text("Tools").tag(ServerEditorTab.tools)
             }
             .pickerStyle(.segmented)
@@ -770,9 +771,12 @@ struct ServerDetailSheet: View {
                     VStack(alignment: .leading, spacing: 12) {
                         GroupBox("Sign-In Method") { remoteSignInSection }
                             .frame(maxWidth: .infinity)
-                        advancedOptionsCard
+                        oauthSettingsCard
                             .frame(maxWidth: .infinity)
                     }
+                case .configuration:
+                    GroupBox("Configuration") { configurationContent }
+                        .frame(maxWidth: .infinity)
                 case .tools:
                     capabilityInfo
                 }
@@ -901,12 +905,12 @@ struct ServerDetailSheet: View {
         return AnyView(HealthBadge(status: mapped, customLabel: label, customIcon: icon))
     }
 
-    private var advancedOptionsCard: some View {
+    private var oauthSettingsCard: some View {
         CollapsibleCard(
             isExpanded: $automaticAdvancedExpanded,
             iconName: "slider.horizontal.3",
-            title: "Advanced Options",
-            subtitle: "OAuth diagnostics, headers, environment overrides."
+            title: "OAuth Settings",
+            subtitle: "Diagnostics and logging."
         ) {
             advancedOptionsContent
         }
@@ -921,9 +925,12 @@ struct ServerDetailSheet: View {
             ))
             .font(.footnote)
             .help("Record verbose OAuth activity in project logs to troubleshoot discovery, sign-in, refresh, and capability fetch steps.")
-
-            Divider()
-
+        }
+        .padding(12)
+    }
+    @ViewBuilder
+    private var configurationContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
                     Text("Additional Headers").font(.subheadline.weight(.semibold))
@@ -968,7 +975,9 @@ struct ServerDetailSheet: View {
                 }
             }
         }
+        .padding(12)
     }
+
 
     private func testConnection() {
         guard server.project != nil else { return }
