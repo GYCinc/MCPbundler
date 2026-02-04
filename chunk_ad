@@ -1,0 +1,100 @@
+                Task { await nativeSync.scanUnmanaged(locations: managedLocationDescriptors) }
+            } label: {
+                Label("Scan Native Folders", systemImage: "magnifyingglass")
+            }
+            .disabled(nativeSync.isScanning)
+
+            Button {
+                Task {
+                    await nativeSync.syncManaged(skills: skills,
+                                                 enablementsBySkillId: enablementsBySkillId,
+                                                 locations: managedLocationDescriptors)
+                }
+            } label: {
+                Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
+            }
+            .disabled(nativeSync.isSyncing || skills.isEmpty)
+
+            Button {
+                browseSkillsFolder()
+            } label: {
+                Label("Browse Library", systemImage: "folder")
+            }
+        }
+    }
+
+    // MARK: - Bindings
+
+    private func locationBinding(for skill: SkillRecord, location: SkillSyncLocation) -> Binding<Bool> {
+        Binding(get: { isLocationEnabled(skill, location: location) },
+                set: { newValue in
+                    Task { await setLocationEnabled(skill, location: location, enabled: newValue) }
+                })
+    }
+
+    private func mcpBinding(for skill: SkillRecord) -> Binding<Bool> {
+        Binding(get: { skill.exposeViaMcp },
+                set: { newValue in
+                    Task { await setExposeViaMcp(skill, enabled: newValue) }
+                })
+    }
+
+    private func isLocationEnabled(_ skill: SkillRecord, location: SkillSyncLocation) -> Bool {
+        enablement(for: skill, location: location)?.enabled ?? false
+    }
+
+    private func enablement(for skill: SkillRecord, location: SkillSyncLocation) -> SkillLocationEnablement? {
+        enablements.first { enablement in
+            guard let enabledSkill = enablement.skill,
+                  let enabledLocation = enablement.location else { return false }
+            return enabledSkill.skillId == skill.skillId && enabledLocation.locationId == location.locationId
+        }
+    }
+
+    private func otherToggleCell(for skill: SkillRecord) -> some View {
+        let isEnabled = !otherLocations.isEmpty && !skill.isArchive
+        let gate = ToggleBatchGate()
+        let sources = otherLocations.map { location in
+            MixedToggleSource(id: "\(skill.skillId)::\(location.locationId)",
+                              isOn: Binding(get: { isLocationEnabled(skill, location: location) },
+                                            set: { newValue in
+                                                guard isEnabled else { return }
+                                                gate.trigger {
+                                                    Task {
+                                                        await setOtherLocationsEnabled(for: skill, enabled: newValue)
+                                                    }
+                                                }
+                                            }))
+        }
+
+        return Group {
+            if sources.isEmpty {
+                Toggle(isOn: .constant(false)) { EmptyView() }
+            } else {
+                Toggle(sources: sources, isOn: \.isOn) { EmptyView() }
+            }
+        }
+        .labelsHidden()
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .disabled(!isEnabled)
+    }
+
+    private func conflictResolutionStates(_ conflict: NativeSkillsSyncConflict) -> [NativeSkillsSyncState] {
+        conflict.states
+            .filter { $0.locationId != SkillSyncManifest.canonicalTool }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+
+    // MARK: - Actions
+
+    @MainActor
+    private func reloadSkills(reason: String) async {
+        guard !isReloading else { return }
+        isReloading = true
+        defer { isReloading = false }
+
+        do {
+            try await skillsLibrary.reload()
+            let infos = await skillsLibrary.list()
+            let impacted = try recordSync.synchronizeRecords(with: infos, in: modelContext)

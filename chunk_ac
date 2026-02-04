@@ -1,0 +1,100 @@
+                                            await nativeSync.resolve(conflict: conflict,
+                                                                     keeping: SkillSyncManifest.canonicalTool,
+                                                                     locations: managedLocationDescriptors)
+                                        }
+                                    }
+                                    ForEach(conflictResolutionStates(conflict), id: \.locationId) { state in
+                                        Button("Keep \(state.displayName)") {
+                                            Task {
+                                                await nativeSync.resolve(conflict: conflict,
+                                                                         keeping: state.locationId,
+                                                                         locations: managedLocationDescriptors)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 6)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 4)
+                }
+            }
+
+            GroupBox("Unmanaged Native Skills") {
+                VStack(alignment: .leading, spacing: 10) {
+                    if nativeSync.unmanagedCandidates.isEmpty {
+                        Text("No unmanaged skills detected in managed locations.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(nativeSync.unmanagedCandidates) { candidate in
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(candidate.locationName.uppercased())
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Text(candidate.displayPath)
+                                        .font(.callout)
+                                        .textSelection(.enabled)
+                                }
+                                Spacer()
+                                Button("Import & Manage") {
+                                    importCandidate = candidate
+                                }
+                                Button("Ignore") {
+                                    nativeSync.ignore(candidate)
+                                }
+                            }
+                            Divider()
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(16)
+        .task { await reloadSkills(reason: "initial") }
+        .alert("Import Skill?", isPresented: Binding(get: { importCandidate != nil },
+                                                     set: { if !$0 { importCandidate = nil } })) {
+            Button("Import & Manage", role: .destructive) {
+                if let candidate = importCandidate {
+                    Task { await importAndManage(candidate) }
+                }
+                importCandidate = nil
+            }
+            Button("Cancel", role: .cancel) { importCandidate = nil }
+        } message: {
+            if let candidate = importCandidate {
+                Text(importCandidateMessage(candidate))
+            } else {
+                Text("This moves the skill into MCP Bundler's library and replaces it with a managed export.")
+            }
+        }
+        .alert("Operation Failed", isPresented: Binding(get: { errorMessage != nil },
+                                                       set: { if !$0 { errorMessage = nil } })) {
+            Button("OK", role: .cancel) { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "Unknown error")
+        }
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Text("Global Skills")
+                .font(.title2.bold())
+            if isReloading || nativeSync.isScanning || nativeSync.isSyncing {
+                ProgressView()
+            }
+            Spacer()
+
+            Button {
+                Task { await reloadSkills(reason: "manual") }
+            } label: {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .disabled(isReloading)
+
+            Button {

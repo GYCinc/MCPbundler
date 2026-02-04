@@ -1,0 +1,100 @@
+//
+//  GlobalSkillsView.swift
+//  MCP Bundler
+//
+//  Manage global skills and sync them with managed native skills folders.
+//
+
+import SwiftUI
+import SwiftData
+#if os(macOS)
+import AppKit
+#endif
+
+struct GlobalSkillsView: View {
+    @Environment(\.modelContext) private var modelContext
+
+    @Query(sort: [SortDescriptor(\SkillRecord.slug, order: .forward)]) private var skills: [SkillRecord]
+    @Query(sort: [SortDescriptor(\SkillSyncLocation.displayName, order: .forward)])
+    private var locations: [SkillSyncLocation]
+    @Query private var enablements: [SkillLocationEnablement]
+
+    private let skillsLibrary = SkillsLibraryService()
+    private let recordSync = SkillRecordSyncService()
+
+    @StateObject private var nativeSync = NativeSkillsSyncService()
+
+    @State private var isReloading = false
+    @State private var errorMessage: String?
+    @State private var importCandidate: NativeSkillsSyncService.UnmanagedSkillCandidate?
+
+    private var managedLocations: [SkillSyncLocation] {
+        locations.filter(\.isManaged)
+            .sorted { lhs, rhs in
+                return lhs.displayName.localizedCaseInsensitiveCompare(rhs.displayName) == .orderedAscending
+            }
+    }
+
+    private var pinnedLocations: [SkillSyncLocation] {
+        let ordered = managedLocations.filter { $0.pinRank != nil }
+            .sorted { ($0.pinRank ?? 0) < ($1.pinRank ?? 0) }
+        return Array(ordered.prefix(3))
+    }
+
+    private func pinnedLocation(at index: Int) -> SkillSyncLocation? {
+        guard pinnedLocations.indices.contains(index) else { return nil }
+        return pinnedLocations[index]
+    }
+
+    private var otherLocations: [SkillSyncLocation] {
+        let pinnedIDs = Set(pinnedLocations.map(\.locationId))
+        return managedLocations.filter { !pinnedIDs.contains($0.locationId) }
+    }
+
+    private var managedLocationDescriptors: [SkillSyncLocationDescriptor] {
+        managedLocations.map { location in
+            SkillSyncLocationDescriptor(locationId: location.locationId,
+                                        displayName: location.displayName,
+                                        rootPath: location.rootPath,
+                                        disabledRootPath: location.disabledRootPath)
+        }
+    }
+
+    private var enablementsBySkillId: [String: Set<String>] {
+        var mapping: [String: Set<String>] = [:]
+        for enablement in enablements where enablement.enabled {
+            guard let skill = enablement.skill,
+                  let location = enablement.location else { continue }
+            mapping[skill.skillId, default: []].insert(location.locationId)
+        }
+        return mapping
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            header
+
+            if isReloading {
+                ProgressView("Refreshing skills…")
+                    .progressViewStyle(.linear)
+            }
+
+            if let exportError = nativeSync.lastExportError {
+                Text(exportError)
+                    .foregroundStyle(.red)
+                    .font(.callout)
+            }
+
+            if let scanError = nativeSync.lastScanError {
+                Text(scanError)
+                    .foregroundStyle(.red)
+                    .font(.callout)
+            }
+
+            if let syncError = nativeSync.lastSyncError {
+                Text(syncError)
+                    .foregroundStyle(.red)
+                    .font(.callout)
+            }
+
+            GroupBox("Skills") {

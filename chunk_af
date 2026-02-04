@@ -1,0 +1,100 @@
+                    }
+                }
+
+            case .rootFile(let skillFile):
+                _ = try SkillDigest.sha256Hex(forFile: skillFile)
+                let slug = try await validateUnmanagedSkillFileAndExtractSlug(skillFile)
+
+                destination = uniqueDestination(for: slug, root: root)
+                try fileManager.createDirectory(at: destination, withIntermediateDirectories: true)
+                let destinationSkillFile = destination.appendingPathComponent("SKILL.md", isDirectory: false)
+                try fileManager.copyItem(at: skillFile, to: destinationSkillFile)
+                do {
+                    try fileManager.removeItem(at: skillFile)
+                } catch {
+                    try? fileManager.removeItem(at: destination)
+                    throw error
+                }
+            }
+
+            await reloadSkills(reason: "import-unmanaged")
+
+            let destinationPath = destination.standardizedFileURL.path
+            let recordDescriptor = FetchDescriptor<SkillRecord>()
+            let updatedRecords = try modelContext.fetch(recordDescriptor)
+            guard let record = updatedRecords.first(where: {
+                URL(fileURLWithPath: $0.sourcePath).standardizedFileURL.path == destinationPath
+            }) else {
+                errorMessage = "Imported skill did not appear in the library. Check SKILL.md validity."
+                return
+            }
+
+            if let location = locations.first(where: { $0.locationId == candidate.locationId }) {
+                updateEnablement(skill: record, location: location, enabled: true)
+                guard saveEnablementChanges(message: "Failed to save skill toggle") else { return }
+
+                let descriptor = SkillSyncLocationDescriptor(locationId: location.locationId,
+                                                             displayName: location.displayName,
+                                                             rootPath: location.rootPath,
+                                                             disabledRootPath: location.disabledRootPath)
+                await nativeSync.applyExport(for: record, location: descriptor, enabled: true)
+            }
+
+            await nativeSync.scanUnmanaged(locations: managedLocationDescriptors)
+        } catch {
+            errorMessage = "Failed to import skill: \(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
+    private func validateUnmanagedSkillDirectory(_ directory: URL) async throws {
+        let fileManager = FileManager.default
+        let validationRoot = fileManager.temporaryDirectory
+            .appendingPathComponent("mcp-bundler-skill-validate-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.createDirectory(at: validationRoot, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: validationRoot) }
+
+        let candidateDestination = validationRoot.appendingPathComponent(directory.lastPathComponent, isDirectory: true)
+        try fileManager.copyItem(at: directory, to: candidateDestination)
+
+        let validator = SkillsLibraryService(root: validationRoot, fileManager: fileManager)
+        try await validator.reload()
+        let infos = await validator.list()
+        if infos.isEmpty {
+            throw SkillsLibraryError.invalidSkill("Directory does not contain a valid SKILL.md")
+        }
+    }
+
+    @MainActor
+    private func validateUnmanagedSkillFileAndExtractSlug(_ skillFile: URL) async throws -> String {
+        let fileManager = FileManager.default
+        let validationRoot = fileManager.temporaryDirectory
+            .appendingPathComponent("mcp-bundler-skillfile-validate-\(UUID().uuidString)", isDirectory: true)
+        try fileManager.createDirectory(at: validationRoot, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: validationRoot) }
+
+        let bundleRoot = validationRoot.appendingPathComponent("candidate", isDirectory: true)
+        try fileManager.createDirectory(at: bundleRoot, withIntermediateDirectories: true)
+        try fileManager.copyItem(at: skillFile, to: bundleRoot.appendingPathComponent("SKILL.md", isDirectory: false))
+
+        let validator = SkillsLibraryService(root: validationRoot, fileManager: fileManager)
+        try await validator.reload()
+        let infos = await validator.list()
+        guard let info = infos.first else {
+            throw SkillsLibraryError.invalidSkill("SKILL.md is not valid")
+        }
+        return info.slug
+    }
+
+    @MainActor
+    private func rebuildSnapshots(for projects: [Project]) async throws {
+        for project in projects {
+            try await ProjectSnapshotCache.rebuildSnapshot(for: project)
+        }
+    }
+
+    @MainActor
+    private func rebuildAllSnapshots() async throws {
+        let descriptor = FetchDescriptor<Project>()
+        let projects = try modelContext.fetch(descriptor)
+        try await rebuildSnapshots(for: projects)

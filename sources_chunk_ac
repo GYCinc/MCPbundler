@@ -1,0 +1,100 @@
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) {
+                    showingAddSheet = false
+                }
+                Button("Add") {
+                    Task { await saveSource() }
+                }
+                .keyboardShortcut(.defaultAction)
+                .disabled(isValidatingMarketplace)
+            }
+        }
+        .padding()
+        .frame(minWidth: 360)
+    }
+
+    private func beginAdd() {
+        addURLDraft = ""
+        addNameDraft = ""
+        addError = nil
+        addDidEditName = false
+        isAutoUpdatingName = false
+        isValidatingMarketplace = false
+        sectionError = nil
+        showingAddSheet = true
+    }
+
+    @MainActor
+    private func saveSource() async {
+        guard !isValidatingMarketplace else { return }
+        do {
+            let repo = try SkillMarketplaceService.parseGitHubRepository(from: addURLDraft)
+            let name = addNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else {
+                addError = "Display name cannot be empty."
+                return
+            }
+            let normalized = "\(repo.owner)/\(repo.repo)".lowercased()
+            let conflict = sources.contains { $0.normalizedKey == normalized }
+            if conflict {
+                addError = "Marketplace already added."
+                return
+            }
+        } catch {
+            addError = error.localizedDescription
+        }
+
+        guard addError == nil else { return }
+
+        isValidatingMarketplace = true
+        defer { isValidatingMarketplace = false }
+
+        do {
+            let repo = try SkillMarketplaceService.parseGitHubRepository(from: addURLDraft)
+            let result = try await marketplaceService.fetchMarketplaceSkills(owner: repo.owner,
+                                                                             repo: repo.repo,
+                                                                             cachedManifestSHA: nil,
+                                                                             cachedMarketplaceJSON: nil,
+                                                                             cachedSkillNames: nil,
+                                                                             cachedDefaultBranch: nil)
+            let availableSkills = result.listing.document.plugins
+            guard !availableSkills.isEmpty else {
+                addError = "Marketplace has no SKILL.md skills."
+                return
+            }
+
+            let source = SkillMarketplaceSource(owner: repo.owner,
+                                                repo: repo.repo,
+                                                displayName: addNameDraft.trimmingCharacters(in: .whitespacesAndNewlines))
+
+            if let update = result.cacheUpdate {
+                source.updateMarketplaceCache(manifestSHA: update.manifestSHA,
+                                              defaultBranch: update.defaultBranch,
+                                              manifestJSON: update.manifestJSON,
+                                              skillNames: update.skillNames)
+            } else {
+                source.cachedDefaultBranch = result.listing.defaultBranch
+                source.cacheUpdatedAt = Date()
+            }
+
+            modelContext.insert(source)
+            try modelContext.save()
+            showingAddSheet = false
+        } catch {
+            addError = error.localizedDescription
+        }
+    }
+
+    private func beginRename(_ source: SkillMarketplaceSource) {
+        renameDraft = source.displayName
+        renameError = nil
+        sourceToRename = source
+    }
+
+    private func rename(_ source: SkillMarketplaceSource, to name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            renameError = "Display name cannot be empty."

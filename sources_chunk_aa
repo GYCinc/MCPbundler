@@ -1,0 +1,100 @@
+//
+//  SkillMarketplaceSourcesView.swift
+//  MCP Bundler
+//
+//  Manages global marketplace sources for skills.
+//
+
+import SwiftUI
+import SwiftData
+
+struct SkillMarketplaceSourcesView: View {
+    @Environment(\.modelContext) private var modelContext
+
+    @Query private var sources: [SkillMarketplaceSource]
+
+    @State private var showingAddSheet = false
+    @State private var addURLDraft: String = ""
+    @State private var addNameDraft: String = ""
+    @State private var addError: String?
+    @State private var addDidEditName = false
+    @State private var isAutoUpdatingName = false
+    @State private var isValidatingMarketplace = false
+    @State private var sectionError: String?
+
+    @State private var sourceToRename: SkillMarketplaceSource?
+    @State private var renameDraft: String = ""
+    @State private var renameError: String?
+
+    @State private var sourceToDelete: SkillMarketplaceSource?
+
+    private let marketplaceService = SkillMarketplaceService()
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            header
+
+            Text("Add GitHub marketplaces that distribute SKILL.md-based skills.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            if let sectionError {
+                Text(sectionError)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+            }
+
+            if sources.isEmpty {
+                Text("No marketplaces added yet.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+
+            Table(sortedSources) {
+                TableColumn("Name") { source in
+                    Text(source.displayName)
+                        .font(.callout)
+                }
+                .width(min: 180, ideal: 220)
+
+                TableColumn("Repo") { source in
+                    Text("\(source.owner)/\(source.repo)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+                .width(min: 220, ideal: 320)
+
+                TableColumn("Skills") { source in
+                    if let count = source.cachedSkillNames()?.count {
+                        Text("\(count)")
+                            .font(.callout)
+                            .monospacedDigit()
+                    } else {
+                        Text("—")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .width(min: 60, ideal: 70, max: 90)
+
+                TableColumn("Actions") { source in
+                    HStack(spacing: 10) {
+                        Button {
+                            beginRename(source)
+                        } label: {
+                            Image(systemName: "pencil")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Rename Marketplace")
+
+                        Button(role: .destructive) {
+                            sourceToDelete = source
+                        } label: {
+                            Image(systemName: "trash")
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Remove Marketplace")
+                    }
+                }
+                .width(min: 90, ideal: 110, max: 140)
