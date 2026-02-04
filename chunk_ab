@@ -1,0 +1,100 @@
+                if skills.isEmpty {
+                    Text("No skills found in the MCP Bundler library.")
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 8)
+                } else {
+                    Table(skills) {
+                        if let location = pinnedLocation(at: 0) {
+                            TableColumn(location.displayName) { skill in
+                                Toggle(isOn: locationBinding(for: skill, location: location)) { EmptyView() }
+                                    .labelsHidden()
+                                    .toggleStyle(.switch)
+                                    .controlSize(.small)
+                                    .disabled(skill.isArchive)
+                            }
+                            .width(min: 80, ideal: 90)
+                        }
+
+                        if let location = pinnedLocation(at: 1) {
+                            TableColumn(location.displayName) { skill in
+                                Toggle(isOn: locationBinding(for: skill, location: location)) { EmptyView() }
+                                    .labelsHidden()
+                                    .toggleStyle(.switch)
+                                    .controlSize(.small)
+                                    .disabled(skill.isArchive)
+                            }
+                            .width(min: 80, ideal: 90)
+                        }
+
+                        if let location = pinnedLocation(at: 2) {
+                            TableColumn(location.displayName) { skill in
+                                Toggle(isOn: locationBinding(for: skill, location: location)) { EmptyView() }
+                                    .labelsHidden()
+                                    .toggleStyle(.switch)
+                                    .controlSize(.small)
+                                    .disabled(skill.isArchive)
+                            }
+                            .width(min: 80, ideal: 90)
+                        }
+
+                        if !otherLocations.isEmpty {
+                            TableColumn("Other") { skill in
+                                otherToggleCell(for: skill)
+                            }
+                            .width(min: 70, ideal: 80)
+                        }
+
+                        TableColumn("MCP") { skill in
+                            Toggle(isOn: mcpBinding(for: skill)) { EmptyView() }
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                        }
+                        .width(min: 60, ideal: 60)
+
+                        TableColumn("Slug") { skill in
+                            Text(skill.slug)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        .width(min: 140, ideal: 160)
+
+                        TableColumn("Name") { skill in
+                            Text(skill.name)
+                        }
+                        .width(min: 180, ideal: 220)
+
+                        TableColumn("Description") { skill in
+                            Text(truncated(skill.descriptionText, limit: 180))
+                                .lineLimit(3)
+                        }
+                        .width(min: 320, ideal: 420)
+
+                        TableColumn("Source") { skill in
+                            Text(skill.isArchive ? "Archive" : "Folder")
+                                .foregroundStyle(skill.isArchive ? .orange : .secondary)
+                        }
+                        .width(min: 80, ideal: 90)
+                    }
+                    .frame(minHeight: 260)
+                }
+            }
+
+            if !nativeSync.conflicts.isEmpty {
+                GroupBox("Conflicts") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(nativeSync.conflicts) { conflict in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("Skill: \(conflict.slug)")
+                                    .font(.headline)
+
+                                Text(conflict.states
+                                    .filter(\.changedFromBaseline)
+                                    .map(\.displayName)
+                                    .joined(separator: ", "))
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+
+                                HStack(spacing: 8) {
+                                    Button("Keep Bundler") {
+                                        Task {

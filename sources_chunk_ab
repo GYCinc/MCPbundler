@@ -1,0 +1,100 @@
+            }
+            .frame(minHeight: 140)
+
+            Text("Marketplace sources are shared across all projects.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .sheet(isPresented: $showingAddSheet) {
+            addSheet
+        }
+        .sheet(item: $sourceToRename) { source in
+            NameEditSheet(title: "Rename Marketplace",
+                          placeholder: "Display name",
+                          name: $renameDraft,
+                          validationError: $renameError,
+                          onSave: { name in
+                              rename(source, to: name)
+                          },
+                          onCancel: {
+                              sourceToRename = nil
+                          })
+        }
+        .alert("Remove Marketplace?", isPresented: Binding(
+            get: { sourceToDelete != nil },
+            set: { if !$0 { sourceToDelete = nil } }
+        )) {
+            Button("Remove", role: .destructive) {
+                if let source = sourceToDelete {
+                    remove(source)
+                }
+                sourceToDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                sourceToDelete = nil
+            }
+        } message: {
+            if let source = sourceToDelete {
+                Text("Remove \"\(source.displayName)\"? Installed skills stay in the library.")
+            }
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 12) {
+            Text("Skill Marketplaces")
+                .font(.headline)
+            Spacer()
+            Button {
+                beginAdd()
+            } label: {
+                Label("Add Marketplace...", systemImage: "plus")
+            }
+        }
+    }
+
+    private var sortedSources: [SkillMarketplaceSource] {
+        SkillMarketplaceSourceDefaults.sortSources(sources)
+    }
+
+    private var addSheet: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Add Marketplace")
+                .font(.title3.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("GitHub URL")
+                    .font(.subheadline)
+                TextField("https://github.com/owner/repo", text: $addURLDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: addURLDraft) { _, _ in
+                        guard !addDidEditName else { return }
+                        if let repo = try? SkillMarketplaceService.parseGitHubRepository(from: addURLDraft) {
+                            isAutoUpdatingName = true
+                            addNameDraft = repo.repo
+                            isAutoUpdatingName = false
+                        }
+                    }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Display name")
+                    .font(.subheadline)
+                TextField("Display name", text: $addNameDraft)
+                    .textFieldStyle(.roundedBorder)
+                    .onChange(of: addNameDraft) { _, _ in
+                        if !isAutoUpdatingName {
+                            addDidEditName = true
+                        }
+                    }
+            }
+
+            if let addError {
+                Text(addError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            if isValidatingMarketplace {
+                ProgressView("Validating marketplace...")
+                    .font(.footnote)

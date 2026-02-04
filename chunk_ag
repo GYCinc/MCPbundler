@@ -1,0 +1,49 @@
+    }
+
+    private func truncated(_ value: String, limit: Int) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > limit else { return trimmed }
+        return String(trimmed.prefix(limit)).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+    }
+
+    private func uniqueDestination(for slug: String, root: URL) -> URL {
+        let fm = FileManager.default
+        var candidate = root.appendingPathComponent(slug, isDirectory: true)
+        if !fm.fileExists(atPath: candidate.path) {
+            return candidate
+        }
+
+        var counter = 2
+        while fm.fileExists(atPath: candidate.path) {
+            candidate = root.appendingPathComponent("\(slug)-\(counter)", isDirectory: true)
+            counter += 1
+        }
+        return candidate
+    }
+
+    private func browseSkillsFolder() {
+        #if os(macOS)
+        let folderURL = skillsLibraryURL()
+        if !NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: folderURL.path) {
+            NSWorkspace.shared.open(folderURL)
+        }
+        #endif
+    }
+
+    private func importCandidateMessage(_ candidate: NativeSkillsSyncService.UnmanagedSkillCandidate) -> String {
+        switch candidate.source {
+        case .directory:
+            return """
+            This moves the skill folder into MCP Bundler's library and replaces it with a managed export.
+
+            Path: \(candidate.displayPath)
+            """
+        case .rootFile:
+            return """
+            This moves the root SKILL.md into MCP Bundler's library and replaces it with a managed folder export.
+
+            Path: \(candidate.displayPath)
+            """
+        }
+    }
+}

@@ -1,0 +1,100 @@
+            try await rebuildSnapshots(for: impacted)
+        } catch {
+            errorMessage = "Failed to refresh skills (\(reason)): \(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
+    private func setLocationEnabled(_ skill: SkillRecord,
+                                    location: SkillSyncLocation,
+                                    enabled: Bool) async {
+        let currentValue = isLocationEnabled(skill, location: location)
+        guard currentValue != enabled else { return }
+
+        updateEnablement(skill: skill, location: location, enabled: enabled)
+        guard saveEnablementChanges(message: "Failed to save skill toggle") else { return }
+
+        let descriptor = SkillSyncLocationDescriptor(locationId: location.locationId,
+                                                     displayName: location.displayName,
+                                                     rootPath: location.rootPath,
+                                                     disabledRootPath: location.disabledRootPath)
+        await nativeSync.applyExport(for: skill, location: descriptor, enabled: enabled)
+    }
+
+    @MainActor
+    private func setOtherLocationsEnabled(for skill: SkillRecord, enabled: Bool) async {
+        guard !otherLocations.isEmpty, !skill.isArchive else { return }
+        var descriptors: [SkillSyncLocationDescriptor] = []
+        for location in otherLocations {
+            updateEnablement(skill: skill, location: location, enabled: enabled)
+            descriptors.append(SkillSyncLocationDescriptor(locationId: location.locationId,
+                                                           displayName: location.displayName,
+                                                           rootPath: location.rootPath,
+                                                           disabledRootPath: location.disabledRootPath))
+        }
+        guard saveEnablementChanges(message: "Failed to save other locations") else { return }
+        for descriptor in descriptors {
+            await nativeSync.applyExport(for: skill, location: descriptor, enabled: enabled)
+        }
+    }
+
+    @MainActor
+    private func updateEnablement(skill: SkillRecord,
+                                  location: SkillSyncLocation,
+                                  enabled: Bool) {
+        if let existing = enablement(for: skill, location: location) {
+            existing.setEnabled(enabled)
+        } else {
+            let enablement = SkillLocationEnablement(skill: skill, location: location, enabled: enabled)
+            modelContext.insert(enablement)
+        }
+    }
+
+    @MainActor
+    private func saveEnablementChanges(message: String) -> Bool {
+        do {
+            if modelContext.hasChanges {
+                try modelContext.save()
+            }
+            return true
+        } catch {
+            errorMessage = "\(message): \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    @MainActor
+    private func setExposeViaMcp(_ skill: SkillRecord, enabled: Bool) async {
+        skill.setExposeViaMcp(enabled)
+        do {
+            if modelContext.hasChanges {
+                try modelContext.save()
+            }
+            try await rebuildAllSnapshots()
+        } catch {
+            errorMessage = "Failed to update MCP exposure: \(error.localizedDescription)"
+        }
+    }
+
+    @MainActor
+    private func importAndManage(_ candidate: NativeSkillsSyncService.UnmanagedSkillCandidate) async {
+        do {
+            let root = skillsLibraryURL()
+            let fileManager = FileManager.default
+            let destination: URL
+
+            switch candidate.source {
+            case .directory(let directory):
+                _ = try SkillDigest.sha256Hex(forSkillDirectory: directory)
+                try await validateUnmanagedSkillDirectory(directory)
+
+                destination = uniqueDestination(for: directory.lastPathComponent, root: root)
+                do {
+                    try fileManager.moveItem(at: directory, to: destination)
+                } catch {
+                    try fileManager.copyItem(at: directory, to: destination)
+                    do {
+                        try fileManager.removeItem(at: directory)
+                    } catch {
+                        try? fileManager.removeItem(at: destination)
+                        throw error

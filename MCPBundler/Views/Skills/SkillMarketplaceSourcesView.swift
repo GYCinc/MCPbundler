@@ -28,9 +28,62 @@ struct SkillMarketplaceSourcesView: View {
 
     @State private var sourceToDelete: SkillMarketplaceSource?
 
+    @State private var selectedTab: Int = 0
+
     private let marketplaceService = SkillMarketplaceService()
 
     var body: some View {
+        VStack(spacing: 0) {
+            Picker("Mode", selection: $selectedTab) {
+                Text("Installed Sources").tag(0)
+                Text("Trending").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .padding()
+
+            if selectedTab == 0 {
+                sourcesContent
+            } else {
+                TrendingSkillsView(marketplaceService: marketplaceService)
+            }
+        }
+        .sheet(isPresented: $showingAddSheet) {
+            addSheet
+        }
+        .sheet(item: $sourceToRename) { source in
+            NameEditSheet(title: "Rename Marketplace",
+                          placeholder: "Display name",
+                          name: $renameDraft,
+                          validationError: $renameError,
+                          onSave: { name in
+                              rename(source, to: name)
+                          },
+                          onCancel: {
+                              sourceToRename = nil
+                          })
+        }
+        .alert("Remove Marketplace?", isPresented: Binding(
+            get: { sourceToDelete != nil },
+            set: { if !$0 { sourceToDelete = nil } }
+        )) {
+            Button("Remove", role: .destructive) {
+                if let source = sourceToDelete {
+                    remove(source)
+                }
+                sourceToDelete = nil
+            }
+            Button("Cancel", role: .cancel) {
+                sourceToDelete = nil
+            }
+        } message: {
+            if let source = sourceToDelete {
+                Text("Remove \"\(source.displayName)\"? Installed skills stay in the library.")
+            }
+        }
+    }
+
+    private var sourcesContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
@@ -105,39 +158,7 @@ struct SkillMarketplaceSourcesView: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
-        .sheet(isPresented: $showingAddSheet) {
-            addSheet
-        }
-        .sheet(item: $sourceToRename) { source in
-            NameEditSheet(title: "Rename Marketplace",
-                          placeholder: "Display name",
-                          name: $renameDraft,
-                          validationError: $renameError,
-                          onSave: { name in
-                              rename(source, to: name)
-                          },
-                          onCancel: {
-                              sourceToRename = nil
-                          })
-        }
-        .alert("Remove Marketplace?", isPresented: Binding(
-            get: { sourceToDelete != nil },
-            set: { if !$0 { sourceToDelete = nil } }
-        )) {
-            Button("Remove", role: .destructive) {
-                if let source = sourceToDelete {
-                    remove(source)
-                }
-                sourceToDelete = nil
-            }
-            Button("Cancel", role: .cancel) {
-                sourceToDelete = nil
-            }
-        } message: {
-            if let source = sourceToDelete {
-                Text("Remove \"\(source.displayName)\"? Installed skills stay in the library.")
-            }
-        }
+        .padding()
     }
 
     private var header: some View {

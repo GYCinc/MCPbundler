@@ -1,0 +1,26 @@
+            return
+        }
+        source.rename(to: trimmed)
+        do {
+            if modelContext.hasChanges {
+                try modelContext.save()
+            }
+            sourceToRename = nil
+            sectionError = nil
+        } catch {
+            renameError = "Failed to rename marketplace: \(error.localizedDescription)"
+        }
+    }
+
+    private func remove(_ source: SkillMarketplaceSource) {
+        modelContext.delete(source)
+        do {
+            if modelContext.hasChanges {
+                try modelContext.save()
+            }
+            sectionError = nil
+        } catch {
+            sectionError = "Failed to remove marketplace: \(error.localizedDescription)"
+        }
+    }
+}
